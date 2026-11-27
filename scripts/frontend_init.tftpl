@@ -1,0 +1,25 @@
+#!/bin/bash
+set -e
+
+apt-get update -y
+apt-get install -y curl git nginx
+
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt-get install -y nodejs
+
+mkdir -p /opt/app
+git clone ${repo_url} /opt/app/repo
+cd /opt/app/repo
+
+cat <<EOF > /opt/app/repo/.env
+VITE_API_BASE_URL=http://${backend_host}:${backend_port}
+EOF
+
+npm install
+npm run build
+
+rm -rf /var/www/html/*
+cp -r dist/* /var/www/html/
+
+systemctl enable nginx
+systemctl restart nginx

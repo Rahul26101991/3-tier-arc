@@ -1,0 +1,29 @@
+#!/bin/bash
+set -e
+
+apt-get update -y
+apt-get install -y postgresql postgresql-contrib git
+
+PG_CONF=$(find /etc/postgresql -name "postgresql.conf" | head -n 1)
+PG_HBA=$(find /etc/postgresql -name "pg_hba.conf" | head -n 1)
+
+sed -i "s/^#\?listen_addresses =.*/listen_addresses = '*'/" "$PG_CONF"
+echo "host    all             all             ${vnet_cidr}            scram-sha-256" >> "$PG_HBA"
+
+systemctl restart postgresql
+systemctl enable postgresql
+
+sudo -u postgres psql -c "ALTER USER postgres PASSWORD '${db_password}';"
+sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = '${db_name}'" | grep -q 1 || \
+  sudo -u postgres psql -c "CREATE DATABASE ${db_name};"
+
+mkdir -p /opt/app
+git clone ${repo_url} /opt/app/repo
+
+if [ -f /opt/app/repo/01-extensions.sql ]; then
+  sudo -u postgres psql -d ${db_name} -f /opt/app/repo/01-extensions.sql
+fi
+
+if [ -f /opt/app/repo/02-telemetry.sql ]; then
+  sudo -u postgres psql -d ${db_name} -f /opt/app/repo/02-telemetry.sql
+fi
